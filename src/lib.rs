@@ -19,10 +19,10 @@
 //!
 //! A route technology does not decide anything: it reads.
 
-use context::ContextValue;
 use message::Message;
 use path::Content;
 use route::{Reading, Source};
+use xcore::ScalarValue;
 
 /// The manifest leaf and the prefix a property carries.
 pub const TECHNOLOGY: &str = "contract";
@@ -76,8 +76,8 @@ impl Reading for Binding {
                 .get(*index)
                 .and_then(|section| section.contract.clone())),
             Self::Type => match message.context().get(TYPE_KEY) {
-                None | Some(ContextValue::Null) => Ok(None),
-                Some(ContextValue::Text(text)) => Ok(Some(text.clone())),
+                None | Some(ScalarValue::Null) => Ok(None),
+                Some(ScalarValue::Text(text)) => Ok(Some(text.clone())),
                 Some(other) => Err(format!("{TYPE_KEY} is {other:?}, and a type is text")),
             },
         }
@@ -106,7 +106,7 @@ mod tests {
         Message::received(
             MessageId::new(1),
             vec![section(10, Some("Order.v2")), section(11, None)],
-            MessageContext::new().with_value(TYPE_KEY, ContextValue::Text("Order".into())),
+            MessageContext::new().with_value(TYPE_KEY, ScalarValue::Text("Order".into())),
             MessageTreatment::default(),
         )
     }
@@ -161,7 +161,7 @@ mod tests {
         let typed = Message::received(
             MessageId::new(3),
             Vec::new(),
-            MessageContext::new().with_value(TYPE_KEY, ContextValue::Integer(4)),
+            MessageContext::new().with_value(TYPE_KEY, ScalarValue::Integer(4)),
             MessageTreatment::default(),
         );
         let not_text = read_from(&typed, "type").expect_err("not text");
