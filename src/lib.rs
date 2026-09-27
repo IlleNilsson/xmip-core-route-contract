@@ -21,7 +21,8 @@
 
 use context::ContextValue;
 use message::Message;
-use route::{Source, SourceError};
+use path::Content;
+use route::{Reading, Source};
 
 /// The manifest leaf and the prefix a property carries.
 pub const TECHNOLOGY: &str = "contract";
@@ -41,34 +42,44 @@ impl Source for ContractSource {
         TECHNOLOGY
     }
 
-    fn read(&self, message: &Message, name: &str) -> Result<Option<String>, SourceError> {
-        let refuse = |reason: String| SourceError::new(TECHNOLOGY, name, reason);
-        let bound = |index: usize| {
-            message
-                .sections()
-                .get(index)
-                .and_then(|section| section.contract.clone())
+    fn compile(&self, name: &str) -> Result<Box<dyn Reading>, String> {
+        let binding = match name.split_once(':') {
+            None if name == "name" => Binding::Section(0),
+            None if name == "type" => Binding::Type,
+            Some(("section", number)) => Binding::Section(number.parse().map_err(|_| {
+                format!("{number} is not a section number, which counts from zero")
+            })?),
+            _ => {
+                return Err(format!(
+                    "not a thing a contract binding says; the names are {}",
+                    NAMES.join(", ")
+                ));
+            }
         };
+        Ok(Box::new(binding))
+    }
+}
 
-        match name.split_once(':') {
-            None if name == "name" => Ok(bound(0)),
-            None if name == "type" => match message.context().get(TYPE_KEY) {
+/// What a name asks of the binding, decided when compiled.
+enum Binding {
+    /// The contract section `n` is bound to.
+    Section(usize),
+    /// The type the content announced.
+    Type,
+}
+
+impl Reading for Binding {
+    fn read(&self, message: &Message, _: Option<&Content<'_>>) -> Result<Option<String>, String> {
+        match self {
+            Self::Section(index) => Ok(message
+                .sections()
+                .get(*index)
+                .and_then(|section| section.contract.clone())),
+            Self::Type => match message.context().get(TYPE_KEY) {
                 None | Some(ContextValue::Null) => Ok(None),
                 Some(ContextValue::Text(text)) => Ok(Some(text.clone())),
-                Some(other) => Err(refuse(format!(
-                    "{TYPE_KEY} is {other:?}, and a type is text"
-                ))),
+                Some(other) => Err(format!("{TYPE_KEY} is {other:?}, and a type is text")),
             },
-            Some(("section", number)) => match number.parse::<usize>() {
-                Ok(index) => Ok(bound(index)),
-                Err(_) => Err(refuse(format!(
-                    "{number} is not a section number, which counts from zero"
-                ))),
-            },
-            _ => Err(refuse(format!(
-                "not a thing a contract binding says; the names are {}",
-                NAMES.join(", ")
-            ))),
         }
     }
 }
@@ -78,6 +89,7 @@ mod tests {
     use super::*;
     use context::MessageContext;
     use message::{MessageSection, MessageTreatment};
+    use route::{Gathering, Promoted, SourceError};
     use stream::Stream;
     use xcore::{MessageId, SectionId, StreamId};
 
@@ -99,8 +111,19 @@ mod tests {
         )
     }
 
+    fn promote(message: &Message, properties: &[&str]) -> Result<Promoted, SourceError> {
+        Gathering::new(&[&ContractSource], properties).promote(message)
+    }
+
+    fn read_from(message: &Message, name: &str) -> Result<Option<String>, SourceError> {
+        let property = format!("contract:{name}");
+        Ok(promote(message, &[property.as_str()])?
+            .get(&property)
+            .map(str::to_string))
+    }
+
     fn read(name: &str) -> Result<Option<String>, SourceError> {
-        ContractSource.read(&message(), name)
+        read_from(&message(), name)
     }
 
     #[test]
@@ -121,11 +144,8 @@ mod tests {
             MessageContext::new(),
             MessageTreatment::default(),
         );
-        assert_eq!(ContractSource.read(&silent, "type").expect("silent"), None);
-        assert_eq!(
-            ContractSource.read(&silent, "name").expect("no section"),
-            None
-        );
+        assert_eq!(read_from(&silent, "type").expect("silent"), None);
+        assert_eq!(read_from(&silent, "name").expect("no section"), None);
     }
 
     #[test]
@@ -144,7 +164,7 @@ mod tests {
             MessageContext::new().with_value(TYPE_KEY, ContextValue::Integer(4)),
             MessageTreatment::default(),
         );
-        let not_text = ContractSource.read(&typed, "type").expect_err("not text");
+        let not_text = read_from(&typed, "type").expect_err("not text");
         assert!(not_text.reason.contains("a type is text"));
     }
 
@@ -152,10 +172,8 @@ mod tests {
     fn the_technology_is_contract_and_promote_reads_the_prefixed_property() {
         assert_eq!(ContractSource.technology(), "contract");
 
-        let sources: [&dyn Source; 1] = [&ContractSource];
-        let promoted = route::promote(
+        let promoted = promote(
             &message(),
-            &sources,
             &["contract:name", "contract:section:1", "contract:type"],
         )
         .expect("readable");
