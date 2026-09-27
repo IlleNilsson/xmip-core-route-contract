@@ -78,7 +78,6 @@ mod tests {
     use super::*;
     use context::MessageContext;
     use message::{MessageSection, MessageTreatment};
-    use route::{Predicate, Value};
     use stream::Stream;
     use xcore::{MessageId, SectionId, StreamId};
 
@@ -164,14 +163,12 @@ mod tests {
         assert_eq!(promoted.get("contract:name"), Some("Order.v2"));
         assert_eq!(promoted.get("contract:section:1"), None);
         assert!(
-            Predicate::equals("contract:type", Value::Text("Order".into()))
-                .test(&promoted)
-                .passed()
-        );
-        assert!(
-            Predicate::starts_with("contract:name", "Order.")
-                .test(&promoted)
-                .passed()
+            path::expression::Expression::parse(
+                "contract:type = 'Order' and contract:name like 'Order.%'"
+            )
+            .expect("compiles")
+            .evaluate(&promoted)
+            .holds()
         );
     }
 }
