@@ -1,11 +1,11 @@
 [package]
 name = "xmip-core-route-contract"
-version = "0.1.0"
-edition = "2024"
-license = "AGPL-3.0-or-later"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 repository = "https://github.com/IlleNilsson/xmip-core-route-contract"
 description = "Contract route technology: `contract:name` reads the contract the first section is bound to, `contract:section:<n>` a numbered section's, `contract:type` the type the Message announces. A xmip-core-route technology."
-publish = false
+publish.workspace = true
 
 [lib]
 path = "src/lib.rs"
@@ -25,13 +25,5 @@ xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core
 context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
 stream = { package = "xmip-core-stream", git = "https://github.com/IlleNilsson/xmip-core-stream", branch = "main" }
 
-[lints.rust]
-unsafe_code = "forbid"
-
-[lints.clippy]
-too_many_lines = "warn"
-pedantic = { level = "warn", priority = -1 }
-missing_errors_doc = "warn"
-missing_panics_doc = "warn"
-unwrap_used = "warn"
-expect_used = "allow"
+[lints]
+workspace = true
