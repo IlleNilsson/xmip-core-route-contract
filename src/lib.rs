@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(promoted.get("contract:name"), Some("Order.v2"));
         assert_eq!(promoted.get("contract:section:1"), None);
         assert!(
-            path::expression::Expression::parse(
+            expression::Expression::parse(
                 "contract:type = 'Order' and contract:name like 'Order.%'"
             )
             .expect("compiles")
